@@ -1,0 +1,957 @@
+---
+title: "HW2 - SDS II"
+author: "Braulio Villalobos-Quiros, Matricola 1999250"
+date: "6/5/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(R2jags)
+library(mcmc)
+library(coda)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggmcmc)
+library(LaplacesDemon)
+library(truncnorm)
+library(kableExtra)
+library(corrplot)
+library(plotly)
+```
+
+# Question #1: Dugongs
+
+Defining the data...
+
+```{r}
+data <- list(   x = c( 1.0,  1.5,  1.5,  1.5, 2.5,   4.0,  5.0,  5.0,  7.0,
+                      8.0,  8.5,  9.0,  9.5, 9.5,  10.0, 12.0, 12.0, 13.0,
+                      13.0, 14.5, 15.5, 15.5, 16.5, 17.0, 22.5, 29.0, 31.5),
+               Y = c(1.80, 1.85, 1.87, 1.77, 2.02, 2.27, 2.15, 2.26, 2.47,
+                     2.19, 2.26, 2.40, 2.39, 2.41, 2.50, 2.32, 2.32, 2.43,
+                     2.47, 2.56, 2.65, 2.47, 2.64, 2.56, 2.70, 2.72, 2.57), N = 27)
+```
+
+## 1a) Illustrate the characteristics of the statistical model for dealing with the Dugong’s data
+
+```{r, echo=FALSE}
+plot_ly(
+  data = as.data.frame(data),
+  x = ~x,
+  y = ~Y,
+  type = "scatter",
+  mode = "markers") %>%
+        layout(title = 'Dugongs Data',
+               plot_bgcolor = "#e5ecf6",
+               xaxis = list(title = 'x (age)'),
+               yaxis = list(title = 'Y (length)'))
+```
+
+We visualize the given data by using Plotly package. As it is completely expected, the length of the Dugongs tends to increase as the become older. 
+
+```{r, echo = FALSE}
+fig <- as.data.frame(data) %>%
+  plot_ly(
+    y = ~Y,
+    type = 'violin',
+    box = list(
+      visible = T
+    ),
+    meanline = list(
+      visible = T
+    ),
+    x0 = 'Length (Y)'
+  ) 
+
+fig <- fig %>%
+  layout(
+    title = 'Violin Plot - Dugongs Length',
+    yaxis = list(
+      title = "Length (Y)",
+      zeroline = F
+    )
+  ) 
+
+
+fig1 <- as.data.frame(data) %>%
+  plot_ly(
+    y = ~x,
+    type = 'violin',
+    box = list(
+      visible = T
+    ),
+    meanline = list(
+      visible = T
+    ),
+    x0 = 'Age (x)'
+  ) 
+
+fig1 <- fig1 %>%
+  layout(
+    title = 'Violin Plot - Dugongs Age',
+    yaxis = list(
+      title = "Age (x)",
+      zeroline = F
+    )
+  )
+
+fig
+fig1
+```
+
+If we analyze the violin plots, the simplest conclusion we can extract is that there's a value in the Age data that appears to be an outlier and corresponds to a Dugong with an age of 31.5 years. Our data then suggests that it isn't expected for a Dugong to live that long. We must keep this in mind in case it is useful to draw conclusions later. 
+
+The following equation describes the normal distribution that follows the length of the Dugongs. 
+
+$$
+\begin{aligned}
+Y_i ∼ N(\mu_i, \tau^2) 
+\end{aligned}
+\begin{aligned}
+\space\space\space\space\space\space\space\space\space\space\space\space\space\space
+\end{aligned}
+\begin{aligned}
+(1)
+\end{aligned}
+$$
+The following equation describes how the mean of the normal distribution of the Length is structured. 
+
+$$
+\begin{aligned}
+\mu_i = f(x_i) = \alpha - \beta\gamma^{x_i} 
+\end{aligned}
+\begin{aligned}
+\space\space\space\space\space\space\space\space\space\space\space\space\space\space
+\end{aligned}
+\begin{aligned}
+(2)
+\end{aligned}
+$$
+
+Where the model parameters are: 
+
+* $\alpha$ ∼ $N(0,\sigma_\alpha^{2})$
+* $\beta$ ∼ $N(0,\sigma_\beta^{2})$
+* $\gamma$ ∼ $Unif(0,1)$
+* $\tau^{2}$ ∼ $IG(a,b)$
+
+## 1b) Derive the corresponding Likelihood
+
+Given equation 1 and 2, we derive the likelihood as following: 
+
+$$
+\begin{eqnarray}
+\mathcal{L}_y(\alpha,\beta,\gamma,\tau^2)
+&=& \prod_{i=1}^{n} \frac{1}{\sqrt{2\pi\tau^2}} e^{-\frac{1}{2\tau^2}(y_i - \mu_i)^2}
+\\ &=& \frac{1}{(2\pi\tau^2)^\frac{n}{2}} \prod_{i=1}^{n} e^{-\frac{1}{2\tau^2}(y_i - \alpha + \beta \gamma^{x_i})^2}
+\\ &=& \frac{1}{(2\pi\tau^2)^\frac{n}{2}} exp\left[{-\frac{1}{2\tau^2}\sum _{i=1}^{n}(y_i - \alpha + \beta \gamma^{x_i})^2}\right] I_{(1,\infty)}(\alpha)I_{(1,\infty)}(\beta)I_{(0,1)}(\gamma)I_{(0,\infty)}(\tau^{2})
+\end{eqnarray}
+$$
+We can also derive the likelihood up to a proportionality constant
+
+$$
+\begin{aligned}
+\mathcal{L}_y(\alpha,\beta,\gamma,\tau^2) \propto \tau^{-n} exp\left[{-\frac{1}{2\tau^2}\sum _{i=1}^{n}(y_i - \alpha + \beta \gamma^{x_i})^2}\right] I_{(1,\infty)}(\alpha)I_{(1,\infty)}(\beta)I_{(0,1)}(\gamma)I_{(0,\infty)}(\tau^{2})
+\end{aligned}
+$$
+
+## 1c) Write down the expression of the joint prior distribution of the parameters at stake and illustrate your suitable choice for the hyperparameters.
+
+According to the parametric distributions given in the homework and previously written down, the prior probability distributions are the following: 
+
+$$
+\begin{aligned}
+f(\alpha) = \sqrt{\frac{1}{2\pi\sigma^2_\alpha}} \space exp\left[{\frac{-\alpha^2}{2\sigma^2_\alpha}}\right] I_{(1,\infty)}(\alpha) \space ;\\ 
+\space f(\beta) = \sqrt{\frac{1}{2\pi\sigma^2_\beta}} \space exp\left[{\frac{-\beta^2}{2\sigma^2_\beta}}\right] I_{(1,\infty)}(\beta) \space ; \\
+\space f(\tau^2) = \frac{b^a}{\Gamma(a)} {(\tau^2)}^{-a-1} e^{\frac{-b}{\tau^2}} I_{(0,\infty)}(\tau^{2}) \space ; \\
+\space f(\gamma) = I_{(0,1)}(\gamma)
+\end{aligned}
+$$
+
+And by combining them all we obtain the Joint Prior Distribution: 
+
+$$
+\begin{aligned}
+f(\alpha)f(\beta)f(\gamma)f(\tau^2) = \sqrt{\frac{1}{2\pi\sigma^2_\alpha}} \sqrt{\frac{1}{2\pi\sigma^2_\beta}}
+exp\left[{\frac{-\alpha^2}{2\sigma^2_\alpha}}\right] exp\left[{\frac{-\beta^2}{2\sigma^2_\beta}}\right] \frac{b^a}{\Gamma(a)} {(\tau^2)}^{-a-1} e^{\frac{-b}{\tau^2}}
+I_{(1,\infty)}(\alpha)I_{(1,\infty)}(\beta)I_{(0,1)}(\gamma)I_{(0,\infty)}(\tau^{2}) 
+\end{aligned}
+$$
+
+Which can also be derived up to a proportionality constant: 
+
+$$
+\begin{aligned}
+f(\alpha)f(\beta)f(\gamma)f(\tau) \propto exp\left[{\frac{-\alpha^2}{2\sigma^2_\alpha}}\right] exp\left[{\frac{-\beta^2}{2\sigma^2_\beta}}\right] exp\left[\frac{-b}{\tau^2}\right] {(\tau^2)}^{-a-1}
+I_{(1,\infty)}(\alpha)I_{(1,\infty)}(\beta)I_{(0,1)}(\gamma)I_{(0,\infty)}(\tau^{2})
+\end{aligned}
+$$
+
+### **Selection of Hyperparameters**
+
+Now, it is evident from the last equation that we have to select values for 4 hyperparameters: $\sigma^2_\alpha$, $\sigma^2_\beta$, $a$ and $b$.
+
+* The selection of the final values of $\sigma^2_\alpha$ $\sigma^2_\beta$ wasn't straightforward. We tested and compared the results obtained by  $\sigma^2_\alpha = \sigma^2_\beta = 1$, $\sigma^2_\alpha = \sigma^2_\beta = 10$, $\sigma^2_\alpha = \sigma^2_\beta = 100$, $\sigma^2_\alpha = \sigma^2_\beta = 1000$. 
+
+In each of these tested values the difference between the predicted length between a Dugong of age 20 and one of age 30 was always equal to 0.0001. Therefore, our choice for the value of $\sigma^2_\alpha$ and $\sigma^2_\beta$ wasn't taken because of their impact over predictions. However, if we analyze the univariate trace plots, we see that for $\sigma^2_\alpha$ = 1000  and $\sigma^2_\beta = 1000$ the amplitude of the values of Beta vary over a significantly wider interval. The same happens with $\sigma^2_\alpha$ = 100 and $\sigma^2_\beta = 100$. 
+
+For this reason, we decide to set the $\sigma^2_\alpha$ = 10 and $\sigma^2_\beta = 10$ so that it has some varying range but not so much as setting a value of 100 or 1000. In any case, the predictions for 20 and 30 years old Dugings made up with $\sigma^2_\alpha = \sigma^2_\beta = 10$, $\sigma^2_\alpha = \sigma^2_\beta = 1000$ vary at most by 1 centimeter. 
+
+* $a=2$ & $b=1$: we set these two values because for strict convenience as the mean of the inverse gamma is given by $b/(a-b)$. Therefore setting these two values will give us an Inverse Gamma Distribution with mean equal to 1, which we consider it, at least to start, as a convenient and simplifying assumption.
+
+```{r}
+sigma_alpha_hyp <- 10
+sigma_beta_hyp <- 10
+a_hyp <- 2
+b_hyp <- 1
+```
+
+### 1d) Derive the functional form (up to proportionality constants) of all full-conditionals
+
+#### **We derive the functional form of $\alpha$ **
+
+$$
+\begin{eqnarray}
+\pi(\alpha|y,\beta,\gamma,\tau^2) 
+
+&\propto& \mathcal{L}_y(\alpha,\beta,\gamma,\tau^2) f(\alpha)f(\beta)f(\gamma)f(\tau^2) 
+
+\\ &\propto& \tau^{-n} exp\left[{-\frac{1}{2\tau^2}\sum _{i=1}^{n}(y_i - \alpha + \beta \gamma^{x_i})^2}\right] 
+exp\left[{\frac{-\alpha^2}{2\sigma^2_\alpha}}\right] exp\left[{\frac{-\beta^2}{2\sigma^2_\beta}}\right] exp\left[\frac{-b}{\tau^2}\right] {(\tau^2)}^{-a-1} 
+
+\\ &\propto& exp\left[{-\frac{1}{2\tau^2}\sum _{i=1}^{n}(y_i - \alpha + \beta \gamma^{x_i})^2}\right] exp\left[{\frac{-\alpha^2}{2\sigma^2_\alpha}}\right]
+
+\\ &\propto& exp\left[{-\frac{1}{2\tau^2}\sum _{i=1}^{n}\left[-2y_i\alpha  + \alpha^2 - 2\alpha\beta\gamma^{x_i})\right]} + \frac{-\alpha^2}{2\sigma^2_\alpha}\right] 
+
+\\ &\propto& exp\left[\frac{-\alpha^2}{2}(\frac{n}{\tau^2}+\frac{1}{\sigma^2_\alpha}) + \alpha\frac{(\sum _{i=1}^{n} y_i+\sum _{i=1}^{n}\beta\gamma^{x_i}))}{\tau^2} \right] 
+
+I_{(1,\infty)}(\alpha)
+\end{eqnarray}
+$$
+
+#### **We derive the functional form of $\beta$**
+
+$$
+\begin{eqnarray}
+\pi(\beta|y,\alpha,\gamma,\tau^2) 
+
+&\propto& \mathcal{L}_y(\alpha,\beta,\gamma,\tau^2) f(\alpha)f(\beta)f(\gamma)f(\tau^2) 
+
+\\ &\propto& \tau^{-n} exp\left[{-\frac{1}{2\tau^2}\sum _{i=1}^{n}(y_i - \alpha + \beta \gamma^{x_i})^2}\right] 
+exp\left[{\frac{-\alpha^2}{2\sigma^2_\alpha}}\right] exp\left[{\frac{-\beta^2}{2\sigma^2_\beta}}\right] exp\left[\frac{-b}{\tau^2}\right] {(\tau^2)}^{-a-1} 
+
+\\ &\propto& exp\left[{-\frac{1}{2\tau^2}\sum _{i=1}^{n}(y_i - \alpha + \beta \gamma^{x_i})^2}\right] exp\left[{\frac{-\beta^2}{2\sigma^2_\beta}}\right]
+
+\\ &\propto& exp\left[{-\frac{1}{2\tau^2}\sum _{i=1}^{n}\left[2y_i\beta\gamma^{x_i}  - 2\alpha\beta\gamma^{x_i} + (\beta\gamma^{x_i})^2\right]} + \frac{-\beta^2}{2\sigma^2_\beta}\right] 
+
+\\ &\propto& exp\left[\frac{-\beta^2}{2}(\frac{\sum _{i=1}^{n}\gamma^{2x_i}}{\tau^2}+\frac{1}{\sigma^2_\beta}) + \beta\frac{-(\sum _{i=1}^{n} \gamma^{x_i}y_i-\sum _{i=1}^{n}\alpha\gamma^{x_i}))}{\tau^2} \right] 
+
+\\ &\propto& exp\left[\frac{-\beta^2}{2}(\frac{\sum _{i=1}^{n}\gamma^{2x_i}}{\tau^2}+\frac{1}{\sigma^2_\beta}) + \beta\frac{(\sum _{i=1}^{n}\alpha\gamma^{x_i}-\sum _{i=1}^{n} \gamma^{x_i}y_i))}{\tau^2} \right] 
+
+I_{(1,\infty)}(\beta)
+\end{eqnarray}
+$$
+
+#### **We derive the functional form of $\gamma$**
+
+$$
+\begin{eqnarray}
+\pi(\gamma|y,\alpha,\beta,\tau^2) 
+
+&\propto& \mathcal{L}_y(\alpha,\beta,\gamma,\tau^2) f(\alpha)f(\beta)f(\gamma)f(\tau^2) 
+
+\\ &\propto& \tau^{-n} exp\left[{-\frac{1}{2\tau^2}\sum _{i=1}^{n}(y_i - \alpha + \beta \gamma^{x_i})^2}\right] 
+exp\left[{\frac{-\alpha^2}{2\sigma^2_\alpha}}\right] exp\left[{\frac{-\beta^2}{2\sigma^2_\beta}}\right] exp\left[\frac{-b}{\tau^2}\right] {(\tau^2)}^{-a-1} 
+
+\\ &\propto& exp\left[{-\frac{1}{2\tau^2}\sum _{i=1}^{n}(y_i - \alpha + \beta \gamma^{x_i})^2}\right] 
+
+\\ &\propto& exp\left[{-\frac{1}{2\tau^2}\sum _{i=1}^{n}\left[2y_i\beta\gamma^{x_i}  - 2\alpha\beta\gamma^{x_i} + (\beta\gamma^{x_i})^2\right]}\right] 
+
+I_{(0,1)}(\gamma)
+\end{eqnarray}
+$$
+
+#### **We derive the functional form of $\tau^2$**
+
+$$
+\begin{eqnarray}
+\pi(\tau^2|y,\alpha,\beta,\gamma) 
+
+&\propto& \mathcal{L}_y(\alpha,\beta,\gamma,\tau^2) f(\alpha)f(\beta)f(\gamma)f(\tau^2) 
+
+\\ &\propto& (2\pi\tau^2)^{-n/2} exp\left[{-\frac{1}{2\tau^2}\sum _{i=1}^{n}(y_i - \alpha + \beta \gamma^{x_i})^2}\right] 
+exp\left[{\frac{-\alpha^2}{2\sigma^2_\alpha}}\right] exp\left[{\frac{-\beta^2}{2\sigma^2_\beta}}\right] exp\left[\frac{-b}{\tau^2}\right] {(\tau^2)}^{-a-1} 
+
+\\ &\propto& (\tau^2)^{-n/2} exp\left[{-\frac{1}{2\tau^2}\sum _{i=1}^{n}(y_i - \alpha + \beta \gamma^{x_i})^2} - \frac{b}{\tau^2}\right] {(\tau^2)}^{-a-1} 
+
+\\ &\propto& (\tau^2)^{-n/2-a-1} exp\left[-{\frac{\sum _{i=1}^{n}(y_i - \alpha + \beta \gamma^{x_i})^2 + 2b}{2\tau^2}} \right] 
+
+I_{(0,\infty)}(\tau^{2})
+\end{eqnarray}
+$$
+
+## 1e) Which distribution can you recognize within standard parametric families so that direct simulation from full conditional can be easily implemented ?
+
+### 1e.1) Parametric Family Distribution for $\alpha$
+
+Considering that 
+
+If $\theta ∼p(\theta)$ and $p(\theta) \propto exp[-1/2a\theta^2 + b\theta]$ then $\theta ∼ \mathcal{N}(\mu = b/a, \sigma^2 = 1/a)$
+
+Then... 
+
+* The $\alpha$ corresponds to a Normal Distribution 
+
+$\mathcal{N}\left(\frac{n}{\tau^2}+\frac{1}{\sigma^2_\alpha},\frac{(\sum _{i=1}^{n} y_i+\sum _{i=1}^{n}\beta\gamma^{x_i})}{\tau^2}\right)$
+
+### 1e.2) Parametric Family Distribution for $\beta$
+
+* The $\beta$ corresponds to a Normal Distribution 
+
+$\mathcal{N}\left(\frac{\sum _{i=1}^{n}\gamma^{2x_i}}{\tau^2}+\frac{1}{\sigma^2_\beta},\frac{(-\sum _{i=1}^{n} \gamma^{x_i}y_i+\sum _{i=1}^{n}\alpha\gamma^{x_i}))}{\tau^2}\right)$
+
+### 1e.3) Parametric Family Distribution for $\tau^2$
+
+* The $\tau^2$ corresponds to an Inverse Gamma  $IG(a= n/2+a, b = \sum _{i=1}^{n}(y_i - \alpha + \beta \gamma^{x_i})^2 + 2b)$
+
+### 1e.4) Parametric Family Distribution for $\gamma$
+
+* The $\gamma$ has no known parametric family distribution.
+
+## 1f) Using a suitable Metropolis-within-Gibbs algorithm simulate a Markov chain (T = 10000) to approximate the posterior distribution for the above model
+
+Now that we have the Full Conditionals for each parameter, we proceed to run the MH algorithm.
+
+The following function implements the **Alpha Full Conditional**, which given the parameters and hyperparameters, simulates from the Normal Distribution which was previously identified. 
+
+```{r}
+#Alpha Full Conditional
+
+alpha_func_form <- function(alpha_par,beta_par,tau_par,gamma_par){
+
+    a <- (data$N/tau_par)+(1/sigma_alpha_hyp)
+    b <- (sum(data$Y)+beta_par*sum(gamma_par^(data$x)))/tau_par
+    #We must use rtruncnorm in order to constraint for the negative values which are not allowed
+    alpha_gen <- rtruncnorm(n=1, mean=b/a, sd = sqrt(1/a),a =1) 
+    return(alpha_gen)
+   
+  # This code was used to ensure the indicator function, before discovering rtruncnorm. 
+  # We keep it for reference and as an alternative, not-so-efficient method of doing this. 
+    
+  # alpha_func_form <- function(alpha_par,beta_par,tau_par,gamma_par){
+  # if(alpha_par >0 && beta_par >0){
+  #   a <- (data$N/tau_par)+(1/sigma_alpha_hyp)
+  #   b <- -data$N*(sum(data$Y)+beta_par*sum(gamma_par^data$x))/tau_par
+  #   alpha_gen <- rnorm(n=1, mean=b/a, sd = sqrt(1/a))
+  #   return(alpha_gen)
+  # }else{
+  #   print("Error: alpha and beta must be betweent 0 and +inf")
+  # }
+}
+```
+
+The following function implements the **Beta Full Conditional**, which given the parameters and hyperparameters, simulates from the Normal Distribution which was previously identified. 
+
+```{r}
+#Beta Full Conditional
+beta_func_form <- function(alpha_par,beta_par,tau_par,gamma_par){
+    a <- (sum(gamma_par^(2*(data$x)))/tau_par)+(1/sigma_beta_hyp)
+    b <- ((alpha_par*sum(gamma_par^(data$x)))-(sum((gamma_par^data$x)*(data$Y))))/tau_par
+    #We must use rtruncnorm in order to constraint for the negative values which are not allowed
+    beta_gen <- rtruncnorm(n=1, mean=b/a, sd = sqrt(1/a),a =1)
+    return(beta_gen)
+}
+```
+
+The following function implements the **Tau Full Conditional**, which given the parameters and hyperparameters, simulates from the Inverse Gamma which was previously identified. 
+
+```{r}
+#Tau Full Conditional
+tau_func_form <- function(alpha_par,beta_par,tau_par,gamma_par){
+    a <- (data$N)/2 + a_hyp
+    b <- 0.5*((sum((data$Y - alpha_par + beta_par*(gamma_par^data$x))^2))+2*b_hyp)
+    tau_gen <- rinvgamma(1,a,b)
+    return(tau_gen)
+}
+```
+
+The following function implements the **Gamma Full Conditional**. This function doesn't simulate from a parametric function since we couldn't identify any distribution of a Parametric Family that seemed like it but we will "tackle" this problem through the use of MH algorithm.
+
+```{r}
+#Implement the Gamma Full Conditional
+gamma_func_form <- function(alpha_par,beta_par,tau_par,gamma_par){
+  aux_1 <- 2*(data$Y)*beta_par*(gamma_par^(data$x))
+  aux_2 <- 2*alpha_par*beta_par*(gamma_par^(data$x))
+  aux_3 <- (beta_par*(gamma_par^(data$x)))^2
+  gamma_gen <- exp(-(1/(2*tau_par)) * sum(aux_1 - aux_2 + aux_3))
+  return(gamma_gen)
+}
+```
+
+Now that we have defined the target function, we implement the MH Algorithm
+
+```{r}
+#Metropolis Hastings Algorithm
+#It takes all the parameters that we have used before plus 1
+gamma_esti_MH <- function(alpha_par,beta_par,tau_par,gamma_par,a_param){
+  
+  #This is the current state of the chain
+  current_time <- gamma_par
+  #This is the candidate state of the chain, which is the current state plus a random component
+  candidate <- runif(1,min = 0,max = a_param)
+  #candidate <- current_time + runif(1,min = 0,max = a_param)
+  
+  #Tossing the coin which serves as an acceptance and rejection
+  omega = runif(1,min=0,max=1)
+  
+  #Taking the decision by comparing ratios of current state, candidate and the omega
+  ACCEPT=(log(omega)<(log(gamma_func_form(alpha_par = alpha_par,
+                                        beta_par = beta_par,
+                                        tau_par = tau_par,
+                                        gamma_par = candidate))-log(gamma_func_form(alpha_par = alpha_par,
+                                                                                     beta_par = beta_par,
+                                                                                     tau_par = tau_par,
+                                                                                     gamma_par = current_time))))
+  #If the previous test is TRUE, then we accept the candidate. Otherwise we stick with the current state.
+  current_time = ifelse(ACCEPT, candidate, current_time)
+  return(current_time)
+}
+```
+
+Now, we proceed to run the simulations as requested. 
+
+```{r}
+set.seed(1234)
+
+# Number of simulations
+n_sim <- 10000
+
+#Set the initial parameters
+alpha_initial   <- 1
+beta_initial    <- 1
+tau_initial     <- 0.5
+gamma_initial   <- 0.5
+
+#Matrix to store the results 
+mat_results <- matrix(nrow = n_sim+1, ncol = 4)
+colnames(mat_results) <- c("alpha","beta","tau","gamma")
+
+#Storing the starting values
+mat_results[1,1] <- alpha_initial
+mat_results[1,2] <- beta_initial
+mat_results[1,3] <- tau_initial
+mat_results[1,4] <- gamma_initial
+
+# We run the simulation...
+for(i in 2:(n_sim+1)){
+  
+  alpha_initial  <- alpha_func_form(alpha_par = alpha_initial,beta_par = beta_initial, 
+                                 tau_par = tau_initial, gamma_par = gamma_initial)
+  beta_initial   <- beta_func_form(alpha_par = alpha_initial,beta_par = beta_initial, 
+                                tau_par = tau_initial,gamma_par = gamma_initial)
+  tau_initial    <- tau_func_form(alpha_par = alpha_initial,beta_par = beta_initial,
+                               tau_par = tau_initial,gamma_par = gamma_initial)
+  gamma_initial  <- gamma_esti_MH(alpha_par = alpha_initial, beta_par = beta_initial,
+                              tau_par = tau_initial, gamma_par = gamma_initial,
+                              a_param = 1)
+
+  #Store the obtained results
+  mat_results[i,1] <- alpha_initial
+  mat_results[i,2] <- beta_initial
+  mat_results[i,3] <- tau_initial
+  mat_results[i,4] <- gamma_initial
+}
+```
+
+## 1g) Show the 4 univariate trace-plots of the simulations of each parameter
+
+```{r}
+par(mfrow=c(2,2))
+plot(mat_results[,1],type="l", ylab = "α", xlab = "Iteration N°", main = "Simulations of Alpha", col = "darkcyan" )
+plot(mat_results[,2],type="l", ylab = "β", xlab = "Iteration N°", main = "Simulations of Beta", col = "royalblue4")
+plot(mat_results[,3],type="l", ylab = "τ^2", xlab = "Iteration N°", main = "Simulations of Tau", col = "steelblue3")
+plot(mat_results[,4],type="l", ylab = "γ", xlab = "Iteration N°", main = "Simulations of Gamma", col = "dodgerblue2")
+```
+
+Several conclusions can be drawn from these plots: 
+
+* See that the 4 plots appear to show stationary processes as as they do not follow an increasing or decreasing trend, for instance. Based on the graphs we can claim that alpha and tau reached their region of stationarity quite fast, way faster than beta and gamma. 
+
+* Beta and Gamma have a more "chaotic" behavior than alpha and tau. However we see that GAmma varies between 0 and 1 as the constraint imposed in the homework requires. Additionally, Beta varies between approximately 0 and 7. These extremes of the interval are impacted by the selection of the hyperarameters we did at the beginning. 
+
+## 1h) Evaluate graphically the behaviour of the empirical averages ˆIt with growing t = 1, ..., T
+
+```{r}
+#Create a Matrix to store the results
+emp_avg_matrix <- matrix(nrow = length(mat_results[,1]), ncol = 4)
+colnames(emp_avg_matrix) <- c("alpha","beta","tau","gamma")
+
+#Compute the empirical average for each t
+for(ppp in 1:length(mat_results[,1])){
+  emp_avg_alpha <- sum(mat_results[1:ppp,1])/length(mat_results[1:ppp,1])
+  emp_avg_beta <- sum(mat_results[1:ppp,2])/length(mat_results[1:ppp,2])
+  emp_avg_tau <- sum(mat_results[1:ppp,3])/length(mat_results[1:ppp,3])
+  emp_avg_gamma <- sum(mat_results[1:ppp,4])/length(mat_results[1:ppp,4])
+  
+  #Storing the Results in the corresponding columns
+  emp_avg_matrix[ppp,1] <- emp_avg_alpha
+  emp_avg_matrix[ppp,2] <- emp_avg_beta
+  emp_avg_matrix[ppp,3] <- emp_avg_tau
+  emp_avg_matrix[ppp,4] <- emp_avg_gamma 
+}
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(emp_avg_matrix[,1],type = "l", ylab = "Avg", xlab = "Iteration N°", main = "Empirical Avg for Alpha", col = "darkcyan")
+plot(emp_avg_matrix[,2],type = "l", ylab = "Avg", xlab = "Iteration N°", main = "Empirical Avg for Beta", col = "royalblue4")
+plot(emp_avg_matrix[,3],type = "l", ylab = "Avg", xlab = "Iteration N°", main = "Empirical Avg for Tau", col = "steelblue3")
+plot(emp_avg_matrix[,4],type = "l", ylab = "Avg", xlab = "Iteration N°", main = "Empirical Avg for Gamma", col = "dodgerblue2")
+```
+
+As suggested by the other plots and the conclusions we made considering them, the empirical average of Tau and alpha stays almost without change over almost all the simulation. This is due to how fast they reached their stationarity zone. 
+
+On the other hand, Beta and Gamma don't present such an non-changing empirical average as alpha and tau, however we can see that around the simulation 2000 stay around the similar value, which in the long run will be the average for the parameter. 
+
+## 1i) Provide estimates for each parameter together with the approximation error and explain how you have evaluated such error
+
+### Estimate and Approximation Error
+
+```{r, echo=FALSE}
+#Create matrix to store
+est_error_matrix <- matrix(nrow = 4, ncol = 4)
+mat_len <- length(mat_results[,1])
+
+#Compute the estimate for alpha, beta, tau and gamma and store them in the corresponding row and column
+#Also compute 3 different ways of calculating the Approximation Error 
+for (yy in 1:4){
+  #Estimate
+  est_error_matrix[yy,1] <- mean(mat_results[,yy])
+  #Approx Error without autocorrelations
+  est_error_matrix[yy,2] <- sqrt(var(mat_results[,yy])/mat_len)
+  #Approx Error with autocorrelations
+  est_error_matrix[yy,3] <- MCSE(mat_results[,yy])
+  #Approx Error with Effective Sample size due to Autocorrelation
+  est_error_matrix[yy,4] <- MCSE(mat_results[,yy],method="sample.variance")
+}
+
+colnames(est_error_matrix) <- c("Estimate","AE no ACF","AE with ACF","AE with ESS")
+rownames(est_error_matrix) <- c('α',"β","τ^2","γ")
+```
+
+```{r}
+round(est_error_matrix,6) %>%
+  kbl(caption = "Estimates & Approximation Errors") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+The columns of this table refer to: estimates, Approximation Error with no Autocorrelation Function, Approximation Error with Autocorrelation Function and Approximation Error with Effective Sample Size due to Autocorrelation. The code that generated this table was omitted in this final report but can be found in the .Rmd that is given together with this document. 
+
+We get the estimates by averaging all the values retrieved from the 10.000 simulations, for each parameter. 
+
+For the approximation error we tested the three ways introduced by professor Tardella's code. 
+
+* The first one corresponds to the easiest and simplest way of computing the approximation error which is taking the standard deviation and dividing by the number of observations. This approach doesn't take into account the possible autocorrelations present in the data. For this reason it might be the simplest one but it usually underestimates the true approximation error, which is generally bigger than the one calculated by following this approach. 
+
+* The second one corresponds to the approximation error considering the possible autocorrelations through the use of the MCSE package. As expected, the approximation error is bigger than in the simplest approach, as this one considers the autocorrelations. 
+
+* The third one considers the Effective Sample size due to Correlation, which takes also the standard deviation of our observations but divides it by a sample sized which is reduced by the autocorrelation. This will result in a bigger approximation error relative to the simplest one (as the denominator decreases)
+
+Now one final remark, note that the biggest approximation error, regardless of which of the 3 approaches we followed, corresponds to the beta parameter. This also makes sense with the traceplots previously analyzed where we saw that the parameter with the most "chaotic" behavior was the beta. Therefore, the fact that this parameter has the biggest approximation error, is perfectly reasonable. 
+
+## 1l) Which parameter has the largest posterior uncertainty? How did you measure it?
+
+```{r,echo=F}
+#Create matrix to store results
+mat_post_uncert <- matrix(nrow = 4, ncol = 2)
+#Name columns and rows of matrix
+colnames(mat_post_uncert) <- c("Standard Deviation","Estimated Error")
+rownames(mat_post_uncert) <- c('α',"β","τ^2","γ")
+
+#Compute Standard deviations and Approximation Errors for alpha, beta, gamma and tau.
+for(pp in 1:4){
+  mat_post_uncert[pp,1] <- sd(mat_results[,pp])
+  mat_post_uncert[pp,2] <- est_error_matrix[pp,3]
+}
+
+round(mat_post_uncert,6) %>%
+  kbl(caption = "Estimates & Approximation Errors") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+We can measure the posterior uncertainty by looking at the standard deviation and also at the approximation error (although a conclusion based on the standard deviation won't contradict one made by using the approximation error, at least qualitatively). 
+
+That being said, once again as expected, the posterior uncertainty is bigger in the Beta and the Gamma parameter, both by looking at the approximation error and the standard deviation. This confirms our conclusions made on the points g, h and i. This was expected since we saw the trace plots. 
+
+## 1m) Which couple of parameters have the largest correlation (in absolute value)?
+
+For this purpose, we compute the Correlation Matrix and we apply absolute value over it. We can also visualize it using a corrplot to have an easier visual understanding of the resulting correlations. 
+
+In this way, we can appreciate how $\beta$ and $\gamma$ are the ones that have a higher correlation as it is equal to 0.76. Additionally, $\alpha$ and $\gamma$ are the second ones with a higher correlation that corresponds to 0.70. 
+
+```{r}
+abs(cor(mat_results))
+```
+
+```{r}
+corrplot(abs(cor(mat_results)),method = "number",diag = FALSE)
+```
+
+## 1n) Use the Markov chain to approximate the posterior predictive distribution of the length of a dugong with age of 20 years.
+
+We implement write the following function, which corresponds to the equation 2 described at the beginning of this homework. 
+
+```{r}
+#Function to calculate the mean of the normal distribution followed by Y (length).
+compute_mu <- function(v_x){
+  estim_mean <- est_error_matrix[1,1]-((est_error_matrix[2,1])*((est_error_matrix[4,1])^v_x))
+  return(estim_mean)
+}
+```
+
+For a Dugong with age 20, we compute the mean of the normal distribution of Y to be 2.517281
+
+```{r}
+compute_mu(20)
+```
+
+If we simulate 1000 times from a Normal Distribution with mean = 2.517281 and variance 0.09037391, we obtain a length of 2.509285.
+
+```{r}
+set.seed(1234)
+n_simulations <- 1000
+vector_20_predict <- rep(NA,n_simulations)
+mean_calc <- compute_mu(20)
+for(uu in 1:n_simulations){
+  vector_20_predict[uu] <- rnorm(1,mean = mean_calc,sd = sqrt(est_error_matrix[3,1]))
+}
+mean(vector_20_predict)
+```
+
+For this reason, we expect that a Dugong that is 20 years old, is going to have a length of 2.5092 meters. 
+
+We visualize the normal distribution corresponding to this mean and variance, which corresponds to the Normal Distribution that characterizes the 20 years old Dugongs
+
+```{r}
+curve(dnorm(x,compute_mu(20), sd = sqrt(est_error_matrix[3,1])),1,4, col = "red", ylab = "")
+title(main = paste0("N(",round(mean(vector_20_predict),1),","
+                    ,round(est_error_matrix[3,1],1),") - 20 years old Dugongs"))
+abline(v = compute_mu(20), col="cyan", lwd=3, lty=2)
+```
+
+## 1o) Provide the prediction of a different dugong with age 30
+
+The mean of the normal distribution of the 30 yeras old Dugongs is equal to 2.517344.
+
+```{r}
+compute_mu(30)
+```
+
+Same as before we run 1000 simulations of a Normal Distribution 
+
+```{r}
+set.seed(1234)
+n_simulations <- 1000
+vector_30_predict <- rep(NA,n_simulations)
+mean_calc <- compute_mu(30)
+for(uu in 1:n_simulations){
+  vector_30_predict[uu] <- rnorm(1,mean = mean_calc,sd = sqrt(est_error_matrix[3,1]))
+}
+mean(vector_30_predict)
+```
+
+For this reason, we expect that a Dugong that is 30 years old, is going to have a length of 2.5093 meters. 
+
+We visualize the normal distribution corresponding to this mean and variance, which corresponds to the Normal Distribution that characterizes the 30 years old Dugongs. 
+
+```{r}
+curve(dnorm(x,compute_mu(30), sd = sqrt(est_error_matrix[3,1])),1,4, col = "cyan", ylab = "")
+title(main = paste0("N(",round(mean(vector_30_predict),1),","
+                    ,round(est_error_matrix[3,1],1),") - 30 years old Dugongs"))
+abline(v = compute_mu(30), col="red", lwd=3, lty=2)
+```
+
+## 1p) Which prediction is less precise?
+
+As expected, both predictions are equally precise as they have the same standard deviation. Also if we make use of the precision, measured over the results of the simulations, we attain the same result. 
+
+```{r}
+prec_vect_20 <- 1 / var(vector_20_predict)
+prec_vect_20
+prec_vect_30 <- 1 / var(vector_30_predict)
+prec_vect_30
+```
+
+**A final remark**: 
+
+* The difference between the predicted length of a 20 years old Dugong and a 30 years old Dugong is almost negligible. If we observe the collected data, this is actually not so weird. 
+
+* Intuitively, and in general terms, a living organism will grow more in its first years of life rather than in its late adulthood. If we remember the conclusion we extracted from the violin plot of the length of Dugongs, the above 30 years old Dugong was an outlier. For this reason, we can conclude based on our data, that it is not frequent for a Dugong to reach such a high age and this also supports the hypothesis that Dugongs won't grow considerably from 20 to 30 years as they do for example from 1 to 10 years. 
+
+# Question 2 
+
+Let us consider a Markov chain (Xt)t0 defined on the state space S = {1, 2, 3} with the following transition
+
+
+![](/Users/brauliovillalobos/Documents/Data_Science_Master_Degree_Sapienza_2021_2023/II_Semester/SDS II/Assignment_2/image001.png)
+
+## 2a) Starting at time t = 0 in the state X0 = 1 simulate the Markov chain with distribution assigned as above for t = 1000 consecutive times. 
+
+We first must define the 2 initial ingredients of the Markov Chain: the Transition Probability Matrix and the initial value of the chain.
+
+```{r}
+script_S=c(1,2,3)      
+```
+
+Based on the above image, we define the following Transition Probability Matrix
+
+```{r}
+tpm<-matrix(c(0,0.5,0.5,0.625,0.125,0.250,2/3,1/3,0),nrow=3,byrow=T)
+tpm
+```
+
+We define the starting value of the chain as indicated in the homework description. 
+
+```{r}
+P <- tpm
+x1 <- 1
+```
+
+We define all the additional characterizations we need in order to run the desired simulations 
+
+```{r}
+#Number of times to simulate
+nsample<-1000
+#Creation of the vector to store the results of the simulation
+chain<-rep(NA,nsample+1)
+#Store the initial value of the simulation in the vector that stores results
+chain[1]<-x1 
+#We set the t to 1 to skip the initial state on the simulations that we are about to run
+t <- 1
+```
+
+We run the simulations, storing in the chain vector, which of the 3 states we visit on each iteration. We set the seed in order to have reproducible results. 
+
+```{r}
+set.seed(1234)
+
+for(t in 1:nsample){
+
+  chain[t+1]<-sample(x=script_S,size=1,prob=tpm[chain[t],])
+}
+table(chain)
+```
+
+The plot becomes unreadable if we picture the whole 1001 simulations. For this reason, only the result of the first 400 simulations is presented: 
+
+```{r}
+#plot(chain,ylim=c(0,4))
+plot(chain[0:400],ylim=c(0,4),type="b",pch=16,lty=3,main="trace plot of the Markov Chain",xlab="t (time index)",ylab=expression(X[t]))
+```
+
+## 2b) Compute the empirical relative frequency of the three states in your simulation 
+
+```{r}
+round(prop.table(table(chain)),2)
+```
+
+Based on the previous results, we can observe that given the particular seed that we chose, we visited 40% of the simulations the state 1, 31% the state 2 and 29% the state 3. Based on this, the most frequently visited state is state number 1.
+
+## 2c) Repeat the simulation for 500 times and record only the final state at time t = 1000 for each of the 500 simulated chains. Compute the relative frequency of the 500 final states. What distribution are you approximating in this way? Try to formalize the difference between this point and the previous point.
+
+We can follow 2 approaches in here. 
+
+* Run 500 chain simulations with the **same** initial state. 
+* Run 500 chain simulations with **random** initial state. 
+
+### Same initial state
+
+```{r}
+x1 <- 1
+#Number of times to simulate
+nsample<-1000
+nchains<-500
+#Creation of the vector to store the results of the simulation
+chain<-rep(NA,nsample+1)
+final_chain <- rep(NA,500)
+#Store the initial value of the simulation in the vector that stores results
+chain[1]<-x1 
+#We set the t to 1 to skip the initial state on the simulations that we are about to run
+t <- 1
+```
+
+```{r}
+set.seed(1234)
+for(i in 1:nchains){
+  chain<-rep(NA,nsample+1)
+  chain[1]<-x1 
+  
+  for(t in 1:nsample){
+    chain[t+1]<-sample(x=script_S,size=1,prob=tpm[chain[t],])
+    if(t == 1000){
+      final_chain[i] <- tail(chain,1)
+    }
+  }
+}
+```
+
+```{r}
+round(prop.table(table(final_chain)),2)
+```
+
+### Different initial state
+
+```{r}
+x1 <- 1
+#Number of times to simulate
+nsample<-1000
+nchains<-500
+#Creation of the vector to store the results of the simulation
+chain<-rep(NA,nsample+1)
+final_chain <- rep(NA,500)
+#Store the initial value of the simulation in the vector that stores results
+chain[1]<-x1 
+#We set the t to 1 to skip the initial state on the simulations that we are about to run
+t <- 1
+```
+
+```{r}
+for(i in 1:nchains){
+  chain<-rep(NA,nsample+1)
+  chain[1]<-sample(script_S,1,replace = F)
+  for(t in 1:nsample){
+    chain[t+1]<-sample(x=script_S,size=1,prob=tpm[chain[t],])
+    if(t == 1000){
+      final_chain[i] <- tail(chain,1)
+    }
+  }
+}
+```
+
+```{r}
+round(prop.table(table(final_chain)),2)
+```
+
+In the second approach, with different initial states, what we are trying to evaluate is how much the initial state of the chains effectively affects the relative frequencies of the visited states. As we can see, the initial state doesn't affect the relative frequencies as we're here dealing with an stationary process. We are therefore approximating in this point the stationary distribution, which is related to the invariable distribution of the Markov Chain. 
+
+##### 2d) compute the theoretical stationary distribution $\pi$  and explain how you have obtained it
+
+The theoretical stationary distribution can be obtained by solving a system of equations. Given the proposed exercise of the homework, and the fact that it is composed of three different states, we must solve the following system of equations: 
+
+$$
+\begin{eqnarray}
+\pi_1p_{11} + \pi_2p_{21} + \pi_3p_{31} = \pi_1 \\
+\pi_1p_{12} + \pi_2p_{22} + \pi_3p_{32} = \pi_2 \\
+\pi_1p_{13} + \pi_2p_{23} + \pi_3p_{33} = \pi_3 
+\end{eqnarray}
+$$
+As usual, we can express these equations by using linear algebra in such a way that: 
+
+$$
+\begin{eqnarray}
+(P^T-\lambda I)\pi = 0
+\end{eqnarray}
+$$
+
+where 
+
+$$
+\begin{eqnarray}
+P =
+\end{eqnarray}
+\begin{bmatrix}
+p_{11} \space \space \space p_{21} \space \space \space p_{31}  \\
+p_{12} \space \space \space p_{22} \space \space \space p_{32}  \\
+p_{13} \space \space \space p_{23} \space \space \space p_{33} 
+\end{bmatrix}
+
+$$
+
+$$
+\begin{eqnarray}
+\pi = \left[ \pi_1 \space \space \space \pi_2 \space \space \space \pi_3\right]
+\end{eqnarray}
+$$
+
+and considering that
+
+$$
+\begin{eqnarray}
+\pi_1 + \pi_2 + \pi_3 = 1  \space \space \space ; \space \space \space \lambda = 1
+\end{eqnarray}
+$$
+
+Keeping in this in mind, we can proceed to solve the system of equations:
+
+```{r}
+pi_statio <- eigen(t(tpm))$vectors[,1]/sum(eigen(t(tpm))$vectors[,1])
+pi_statio
+```
+
+##### 2e) Is it well approximated by the simulated empirical relative frequencies computed in (b) and (c)?
+
+For this question we can compute how different are the empirical results from point b and c with the ones we have just obtained in point d through the theoretical approach. 
+
+```{r}
+prop.table(table(final_chain)) - pi_statio
+```
+
+or to get a clearer view of how different they are, regardless of the sign, we apply an absolute value 
+
+```{r}
+abs(prop.table(table(final_chain)) - pi_statio)
+```
+
+With this we can see that the differences are quite small and therefore we can claim that the simulated empirical relative frequencies are indeed well approximated. 
+
+##### 2f) What happens if we start at t = 0 from state X0 = 2 instead of X0 = 1?
+
+If we repeat the simulations...
+
+```{r}
+P <- tpm
+x1 <- 2
+
+#Number of times to simulate
+nsample<-1000
+#Creation of the vector to store the results of the simulation
+chain<-rep(NA,nsample+1)
+#Store the initial value of the simulation in the vector that stores results
+chain[1]<-x1 
+#We set the t to 1 to skip the initial state on the simulations that we are about to run
+t <- 1
+
+set.seed(1234)
+
+for(t in 1:nsample){
+
+  chain[t+1]<-sample(x=script_S,size=1,prob=tpm[chain[t],])
+}
+
+round(prop.table(table(chain)),2)
+```
+
+```{r}
+abs(prop.table(table(chain)) - pi_statio)
+```
+
+The differences are also negligible and this is due to the fact that regardless of the starting point, since the Chain is a stationary stochastic process that varies regularly but randomly within a range that is the support of the limiting distributrion, which is related to the stationary distribution, which is related to the invariable distribution of the Markov Chain. This holds as long as the transition matrix doesn't change and as long as we're talking about an stochastic process. 
+
+# Appendix
+
+### Version with precision 
+
+$$
+\begin{aligned}
+\mathcal{L}_y(\alpha,\beta,\gamma,\tau^{-1}) = \tau^{n/2} (2\pi)^{-n/2} exp\left[-\frac{\tau n}{2} \sum _{i=1}^{n}(y_i - \alpha + \beta \gamma^{x_i})^2\right] I_{(1,\infty)}(\alpha)I_{(1,\infty)}(\beta)I_{(0,1)}(\gamma)I_{(0,\infty)}(\tau^{-1})
+\end{aligned}
+$$
+Which can also be derived up to a proportionality constant by the following
+
+$$
+\begin{aligned}
+\mathcal{L}_y(\alpha,\beta,\gamma,\tau^{-1}) \propto \tau^{n/2} exp\left[-\frac{\tau}{2} \sum _{i=1}^{n}(y_i - \alpha + \beta \gamma^{x_i})^2\right] I_{(1,\infty)}(\alpha)I_{(1,\infty)}(\beta)I_{(0,1)}(\gamma)I_{(0,\infty)}(\tau^{-1})
+\end{aligned}
+$$
