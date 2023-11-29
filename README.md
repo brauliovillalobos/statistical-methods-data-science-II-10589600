@@ -11,8 +11,8 @@ This course covers:
   Jeffreys’Rule). Conjugate analysis. Techniques and tools for characterizing and summarizing posterior distributions. Bayes Factor, introduction to multi-      model inference and Bayesian model choice.
 
 2) Multiparameter Inference
-  This part considers the multivariate normal model and multinomial models and introduce to approximate random sampling from a multivariate distribution. Bayesian inference in the presence of missing data.
+  * This part considers the multivariate normal model and multinomial models and introduce to approximate random sampling from a multivariate distribution. Bayesian inference in the presence of missing data.
 
 3) MC & MCMC
-  Introduction to Monte Carlo and Monte Carlo Markov Chain sampling techniques for approximating expectations and distributions: Gibbs Sampling and Metropolis Hastings algorithms.
+  * Introduction to Monte Carlo and Monte Carlo Markov Chain sampling techniques for approximating expectations and distributions: Gibbs Sampling and Metropolis Hastings algorithms.
 
