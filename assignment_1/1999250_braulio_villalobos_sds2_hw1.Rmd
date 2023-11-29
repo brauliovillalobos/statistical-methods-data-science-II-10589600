@@ -1,0 +1,543 @@
+---
+title: "SDS II - HW 1"
+author: "Braulio Villalobos-Quiros - Matricola 1999250"
+date: "4/18/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+# Question 1 - Rome car accidents
+
+Importing the data...
+```{r}
+mydata <- subset(roma,subset=sign_up_number==104)
+```
+
+### 1.1 Describe your observed data
+
+Data is composed of 5 variables and 19 observations. 
+
+* week: gives the number of the week in which the accidents took place. 
+* weekday: identifies the name of the day in which the accidents took place. 
+* hour: gives the hour at which the accidents took place. 
+* car_accidents: gives the number of accidents that were registered on that day, week and hour.
+* sign_up_number: unspecified but we only consider data with '104' in this variable. 
+
+```{r}
+hist(mydata$car_accidents, main = "Distribution of Car Accidents",
+     xlab = "number of car accidents", probability = T)
+```
+
+In this histogram we can appreciate that, in the majority of our data, the number of car accidents oscilates between 1 and 3 car accidents. We could claim that our prior belief is not dramatically distant or crazy, at least with respect to these realizations of the random variable, which we have collected in our data.  We can't extract a lot more of inferential insights from the data and because of that we will carry out a Fully Bayesian Analysis.
+
+### 1.2 Justify as best you can your choices for the ingredients of your Bayesian model especially for the choices you make for the prior distribution
+
+As indicated in the homework, as Statistical Model a conditionally iid Poisson Distribution with unknown parameter is used. Before explaining the reasons that motivated selection for the Prior Distribution, there are two important things to point out: 
+
+* Note that the number of car accidents $Y_i = y_i$ is a discrete random variable. 
+* Note also that we're in a multiple observations context. 
+
+Now, given that our Statistical Model follows a Poisson Distribution and with the aim of selecting a Prior Distribution that has the same functional form, so that the Posterior follows that same functional form,*a Gamma Distribution for our Prior Distribution* is selected. Following... the reasons:
+
+If 
+
+$$
+\begin{aligned}
+Y_1,...,Y_n | \theta ∼ Poisson(\theta)
+\end{aligned}
+$$
+where 
+
+$$
+\begin{aligned}
+Y_i \in \{0,1,2,...\}
+\end{aligned}
+$$
+
+Then given the multiple observations case and the conditional iid assumption: 
+
+$$
+\begin{aligned}
+Pr(Y_i = y | \theta) = f(y_1,...,y_n | \theta) =  \prod \frac{e^{-\theta} \theta^{y_i}}{y_i !}
+\end{aligned}
+$$
+
+So, after combining the products, we get:
+
+$$
+\begin{aligned}
+\prod \frac{e^{-\theta} \theta^{y_i}}{y_i !} = \frac{e^{-n \theta} \theta^{\sum _{i=1}^{n}y_i}}{\prod_{i=1}^{n}y_i!} = L_\tilde{y}(\theta)
+\end{aligned}
+$$
+This final expression corresponds to the Likelihood Function, which as previously stated, follows a Poisson Distribution for a multiple observations context.
+
+Here we can take one additional step that will simplify our work since it is evident that the denominator of the previous Likelihood Functional doesn't depend on $\theta$. For this reason, we can treat the denominator as a multiplicative constant and use the proportionality such that: 
+
+$$
+\begin{aligned}
+L_\tilde{y}(\theta) = \frac{e^{-n \theta} \theta^{\sum _{i=1}^{n}y_i}}{\prod_{i=1}^{n}y_i!} \propto {e^{-n \theta} \theta^{\sum _{i=1}^{n}y_i}}
+\end{aligned}
+$$
+
+Now, based on this, we need to select a convenient Prior so that it shows the same functional form as the Likelihood we just derived and therefore will make our inference more direct and easier to interpret and update. Hence, keeping this in mind, consider the following if we select a Gamma Distribution for our Prior: 
+
+$$
+\begin{aligned}
+\theta ∼ Gamma(rate = r, shape = s)
+\end{aligned}
+$$
+and 
+$$
+\begin{aligned}
+\Pi_h({\theta}) = \Pi({\theta}) ; h = (r,s)
+\end{aligned}
+$$
+where h is the vector of components of the hyperparameter of the Gamma Distribution.
+
+Hence, we have that: 
+
+$$
+\begin{aligned}
+\Pi_h({\theta}) = \frac{r^{s}}{\Gamma(s)} e^{-r \theta} \theta^{s-1} I_{(0,+\infty)}(\theta)
+\end{aligned}
+$$
+By selecting this prior, we can see the functional form is similar to the Poisson one, except for the proportionality constant in front of the expression. So, once again, taking this as a proportionality constant as it doesn't depend on $\theta$, we obtain the following:
+
+$$
+\begin{aligned}
+\Pi({\theta}) \propto  e^{-r \theta} \theta^{s-1} 
+\end{aligned}
+$$
+We now can see this appears to be quite similar to the Likelihood function up to a proportionality constant that we previously derived. So, as a quick recap we have that: 
+
+$$
+\begin{aligned}
+\Pi({\theta}) \propto  e^{-r \theta} \theta^{s-1} 
+\end{aligned}
+\begin{aligned}
+and
+\end{aligned}
+\begin{aligned}
+L_\tilde{y}(\theta) \propto {e^{-n \theta} \theta^{\sum _{i=1}^{n}y_i}}
+\end{aligned}
+$$
+Therefore, combining this prior and the likelihood, we can obtain a **posterior** in the same functional form as the prior such that 
+$$
+\begin{aligned}
+\Pi({\theta|\tilde{y}}) \propto  e^{-(n+r) \theta} \theta^{\sum_{i=1}^{n}y_i + s - 1} 
+\end{aligned}
+\begin{aligned}
+where 
+\end{aligned}
+\begin{aligned}
+h^{post} = h^{*} = (n+r, \sum_{i=1}^{n}y_i + s)
+\end{aligned}
+$$
+
+### 1.3 Main inferential findings
+
+Consider that the average number of hourly car accidents occurring in Rome during the day is 3.22
+
+Now, taking into account that the Prior Distribution is centered in 3.22 and we decide to take a variance of 2 because we decide that we never hear that a day passes by in Rome where there isn't at least one accident but there are also some days with a lot of accidents, then following is the explanation of how we derive the values of s and r. 
+
+In a Gamma Function we have: 
+
+$$
+\begin{aligned}
+\mu = \frac{shape}{rate}
+\end{aligned}
+\begin{aligned}
+and
+\end{aligned}
+\begin{aligned}
+\sigma^{2} = \frac{shape}{rate^{2}}
+\end{aligned}
+$$
+Then, solving for the Gamma parameters we obtain: 
+
+$$
+\begin{aligned}
+shape = \mu * rate
+\end{aligned}
+\begin{aligned}
+and
+\end{aligned}
+\begin{aligned}
+rate = \frac{\mu}{\sigma^{2}}
+\end{aligned}
+$$
+Then if we substitute the values of $\mu$ and $\sigma^{2}$ in the formula of the rate, with the corresponding values that were previously defined according to our **prior belief**, we obtain: 
+
+$$
+\begin{aligned}
+rate = \frac{\mu}{\sigma^{2}} = \frac{3.22}{2}
+\end{aligned}
+$$
+And consequently, 
+
+$$ 
+\begin{aligned}
+shape = \mu * rate = 3.22 * \frac{3.22}{2} = \frac{10.3684}{2}
+\end{aligned}
+$$
+
+For this reason, we define the values of $s = shape$ and $r = rate$ for our Prior Distribution as: 
+
+```{r}
+s <- 10.3684/2
+r <- 3.2200/2
+```
+
+If we simulate 100000 times from a Gamma distribution with shape = 10.3684/2 and rate = 3.2200/2, we obtain the following results
+
+```{r}
+mean(rgamma(100000,shape=s,rate=r))
+var(rgamma(100000,shape=s,rate=r))
+```
+
+By the Strong Law of Large Numbers, we know that in the limit, as the number of simulations increase, the random value will degenerate towards our mean and variance previously defined. 
+
+##### Prior Distribution
+
+The following graph pictures the Gamma Prior Distribution defined by the $shape = 10.3684/2$ and $rate = 3.2200/2$ values previously defined and explained. This reflects our prior beliefs and what we think, before observing data, about the phenomena that we are trying to model and make inference from. 
+
+```{r}
+curve(dgamma(x,rate=r,shape=s),from=0,to=10,xlab=expression(theta),ylab=expression(pi(theta)),
+      main=paste0("Gamma Prior Distribution \n ",paste0("with rate r=",round(r,1)," and shape s=",round(s,1))),n=10000, col="cyan", type = "l")
+```
+
+##### Posterior Distribution
+
+The following graph pictures the posterior distribution. This is obtained by means of **including the observed data along with the prior**. By using the $h^*$ hyperparameter defined above, where the $s^* = \sum_{i=1}^{n}y_i + s$ and $r^* = n+r$. In words, the new shape parameter corresponds to the sum of the old s parameter plus the sum of the observations of car accidents, while the new rate parameter corresponds to the old r parameter plus the total number of observations. 
+
+**Hence, we obtain this by including the observed data and therefore update our prior belief**
+
+```{r}
+s1 <- s + sum(mydata$car_accidents)
+r1 <- r + length(mydata$car_accidents)
+
+curve(dgamma(x,rate=r1,shape=s1),from=0,to=10,col="blue",
+      xlab=expression(theta),ylab=expression(pi(theta)),
+      main=paste0("Gamma Posterior Distribution \n ",paste0("with rate r=",round(r1,1)," and shape s=",round(s1,1))),1000)
+```
+
+Now, the following graph allows us to appreciate more clearly how the observed data influences our prior belief and how the posterior is nearer to the Likelihood, as we obtain more data. 
+
+```{r}
+curve(dgamma(x,rate=r,shape=s),from=0,to=10,xlab=expression(theta),ylab=expression(pi(theta)),
+      main=paste0("Gamma Prior and Posterior Distribution"),n=10000, col="cyan", type = "l",ylim=c(0,1))
+curve(dgamma(x,rate=r1,shape=s1),from=0,to=10,col="blue",1000, add = T)
+abline(v=mean(mydata$car_accidents), col = "red")
+```
+
+As we obtain more data, the prior belief becomes more and more negligible. We can appreciate this more clearly if we analyze the following formula for the Expected value of the Posterior: 
+
+
+$$ 
+\begin{aligned}
+\mu^* =  \frac{s^*}{r^*} = \frac{s + \sum_{i=1}^{n}y_i}{r^* + n} = \frac{s}{r} \frac{r}{r+n} + \frac{\sum_{i=1}^{n}y_i}{n} \frac{n}{r+n} = \mu \frac{\psi}{\psi+n} + \tilde{y}_n \frac{n}{\psi+n} = \mu w + \tilde{y}_n (1-w)
+\end{aligned}
+$$
+See that $\mu^*$ has two components, the first one corresponds to the prior mean (\mu) and the second one corresponds to the MLE in Poison iid case $\tilde{y}_n$ and each of these terms have a weight. In other words, the updating of the new posterior expectation, which is the center of the posterior distribution, can be interpreted as a weighted average of two components. 
+
+Now, note that as $n$ becomes bigger, the term $w$ becomes smaller and therefore the term $\mu w$ also becomes smaller. This means that as we collect more information, the prior becomes more and more negiglible. 
+
+For this reason is that in the Gamma Prior and Posterior Distribution Graph, we can see that the Posterior (once we observe data) is way nearer to the Likelihood that the Prior (before seeing data). Our believe updates as we observe more data. 
+
+#### Posterior uncertainty
+
+Regarding the posterior uncertainty if we analyze the Gamma Prior and Posterior Distribution Graph, we can already have a good understanding of how once we observe data the uncertainty of the Posterior decreases in comparison with the uncertainty of the parameter used for the prior. This decrease in the uncertainty can be appreciated by
+
+* Mean: the mean of the Posterior (once data is observed) is nearer to the Likelihood than the mean of the Prior. 
+* Variance: the variance of the Posterior (once data is observed) is smaller than the variance of the Prior. 
+
+This can be seen graphically in the Gamma Prior and Posterior Distribution Graph or also on the following Comparison table where we can observe the mean of the Posterior is bigger than the one of the Prior, as equally as the variance of the Posterior is smaller than the one of the Prior. 
+
+```{r}
+set.seed(123)
+mean_vec <- c(round(mean(rgamma(100000,shape=s,rate=r)),3),round(mean(rgamma(100000,shape=s1,rate=r1)),3))
+var_vec <- c(round(var(rgamma(100000,shape=s,rate=r)),3),round(var(rgamma(100000,shape=s1,rate=r1)),3))
+
+comp_df <- as.data.frame(rbind(mean_vec,var_vec))
+colnames(comp_df) <- c("Prior","Posterior")
+comp_df
+```
+
+#### Possible alternative point estimates & Interval
+
+##### Alternative Point Estimate
+```{r}
+posterior_mean <- s1/r1
+posterior_stdev <- sqrt(s1/(r1**2))
+posterior_mode <- (s1-1)/r1
+posterior_median <-qgamma(0.50, shape = s1, rate = r1)
+```
+
+##### Interval for $\alpha$ = 5%
+
+```{r}
+alpha_int <- 0.05
+posterior_lower_limit <- qgamma(alpha_int/2, shape=s1, rate=r1)
+posterior_upper_limit <- qgamma(1-(alpha_int/2), shape=s1, rate=r1)
+```
+
+The mean and the median are pretty similar and this is due to the fact that the variance of the posterior is small (graphically we can appreciate that the Posterior is very concentrated, unlike the Prior).With respect to the lower and upper limit for an alpha = 5%, they allow us to be more secure of the decision we have made. 
+
+```{r}
+summary_table<- rbind(
+  mode=posterior_mode,
+  mean=posterior_mean,
+  median = posterior_median,
+  stdev=posterior_stdev,
+  lower_limit=posterior_lower_limit,
+  upper_limit=posterior_upper_limit)
+colnames(summary_table) <- "Post"
+summary_table
+```
+
+# Question 2 - Bulb Lifetime
+
+Importing data...
+
+```{r}
+bulb_data <- c(1,13,27,43,73,75,154,196,220,297,344,610,734,783,796,845,859,992,1006,1471)
+```
+
+```{r}
+hist(bulb_data, main = "Distribution of Lifetime of Bulbs",
+     xlab = "Hours of lifetime",probability = T, breaks = 16)
+```
+
+Different from the Exercise 1, we can't obtain any at least basic idea of how "crazy" our prior belief is with respect to these realizations of data, since our prior belief is based on a standard deviation and a mean. 
+
+### 2.1 Write the main ingredients of the Bayesian model.
+
+As indicated in the homework, as Statistical Model a conditionally iid Exponential Distribution with unknown parameter is used. Before explaining the reasons that motivated selection for the Prior Distribution, there are two important things to point out: 
+
+* Note that the lifetime of bulbs $Y_i = y_i$ is a continuos random variable. 
+* Note also that we're in a multiple observations context. 
+
+Now, given that our Statistical Model follows an Exponential Distribution and with the aim of selecting a Prior Distribution that has the same functional form, so that the Posterior follows that same functional form,*a Gamma Distribution for our Prior Distribution* is selected. Following... the reasons:
+
+$$
+\begin{aligned}
+Y_1,...,Y_n | \theta ∼ Exp(\lambda)
+\end{aligned}
+$$
+
+$$
+\begin{aligned}
+Y_i \in (0,+\infty)
+\end{aligned}
+$$
+
+Then given the multiple observations case and the conditional iid assumption: 
+
+$$
+\begin{aligned}
+Pr(Y_i = y | \theta) = f(y_1,...,y_n | \theta) =  \prod_{i=1}^{n} \theta e^{-\theta y_i}
+\end{aligned}
+$$
+
+So, after combining the products, we get:
+
+$$
+\begin{aligned}
+\prod_{i=1}^{n} \theta e^{-\theta y_i} = \theta^n e^{-\theta \sum_{i=1}^{n}y_i} = L_\tilde{y}(\theta)
+\end{aligned}
+$$
+This final expression corresponds to the Likelihood Function, which as previously stated, follows an Exponential Distribution for a multiple observations context.
+
+Now, based on this, we need to select a convenient Prior so that it shows the same functional form as the Likelihood we just derived and therefore will make our inference more direct and easier to interpret and update. Hence, keeping this in mind, consider the following if we select a Gamma Distribution for our Prior: 
+
+$$
+\begin{aligned}
+\theta ∼ Gamma(rate = r, shape = s)
+\end{aligned}
+$$
+and 
+
+$$
+\begin{aligned}
+\Pi_h({\theta}) = \Pi({\theta}) ; h = (r,s)
+\end{aligned}
+$$
+where h is the vector of components of the hyperparameter of the Gamma Distribution.
+
+Hence, we have that: 
+
+$$
+\begin{aligned}
+\Pi_h({\theta}) = \frac{r^{s}}{\Gamma(s)} e^{-r \theta} \theta^{s-1} I_{(0,+\infty)}(\theta)
+\end{aligned}
+$$
+
+By selecting this prior, we can see the functional form is similar to the Exponential one, except for the proportionality constant in front of the expression. So, once again, taking this as a proportionality constant as it doesn't depend on $\theta$, we obtain the following:
+
+$$
+\begin{aligned}
+\Pi({\theta}) \propto  e^{-r \theta} \theta^{s-1} 
+\end{aligned}
+$$
+We now can see this appears to be quite similar to the Likelihood function up to a proportionality constant that we previously derived. So, as a quick recap we have that: 
+
+$$
+\begin{aligned}
+\Pi({\theta}) \propto  e^{-r \theta} \theta^{s-1} 
+\end{aligned}
+\begin{aligned}
+and
+\end{aligned}
+\begin{aligned}
+L_\tilde{y}(\theta) =  \theta^n e^{-\theta \sum_{i=1}^{n}y_i}
+\end{aligned}
+$$
+Therefore, combining this Prior and the Likelihood, we can obtain a posterior in the same functional form as the prior such that 
+
+$$
+\begin{aligned}
+\Pi({\theta|\tilde{y}}) \propto  e^{-(r+\sum_{i=1}^{n}y_i) \theta} \theta^{s + n - 1} 
+\end{aligned}
+\begin{aligned}
+where 
+\end{aligned}
+\begin{aligned}
+h^{post} = h^{*} = (r+\sum_{i=1}^{n}y_i, s + n)
+\end{aligned}
+$$
+In this way we show that the Gamma Prior is Conjugate to the Exponential Sampling Distribution such that: 
+
+$$
+\begin{aligned}
+\Pi({\theta|\tilde{y}}) ∼ G(shape = s + n, rate = r+\sum_{i=1}^{n}y_i)
+\end{aligned}
+$$
+
+### 2.2 Choose a conjugate prior distribution $\pi(\theta)$ with mean equal to 0.003 and standard deviation 0.00173.
+
+In a Gamma Function and taking into account the given information of the mean and the standard deviation, we have: 
+
+$$
+\begin{aligned}
+\mu = \frac{shape}{rate} = 0.003
+\end{aligned}
+\begin{aligned}
+and
+\end{aligned}
+\begin{aligned}
+\sigma^{2} = \frac{shape}{rate^{2}} = 0.00173^{2}
+\end{aligned}
+$$
+
+Then, solving for the Gamma parameters we obtain: 
+
+$$
+\begin{aligned}
+\sigma^{2} = \frac{shape}{rate^{2}} \implies shape = \sigma^{2} * rate^{2} \implies shape = 0.00173^{2} * rate^{2}
+\end{aligned}
+$$
+$$
+\begin{aligned}
+\mu = \frac{shape}{rate} = 0.003 \implies \frac{0.00173^{2}*rate^{2}}{rate} = 0.003 \implies rate = \frac{0.003}{0.00173^{2}} \implies rate = 1002.372
+\end{aligned}
+$$
+And consequently, 
+
+$$ 
+\begin{aligned}
+shape = 0.00173^{2} * rate^{2} \implies shape = 0.00173^{2} * 1002.372^{2} \implies shape = 3.007115
+\end{aligned}
+$$
+Keeping this in mind, we will take as a Prior a Gamma with $shape = 3.007115$ and $rate = 1002.372$. 
+
+### 2.3 Argue why with this choice you are providing only a vague prior opinion on the average lifetime of the bulb.
+
+To answer this we decide to graph the Prior using the parameters previously stated. 
+
+```{r}
+s_exp <- 3.007115
+r_exp <- 1002.372
+```
+
+```{r}
+curve(dgamma(x,rate=r_exp,shape=s_exp),from=0,to=0.01,xlab=expression(theta),ylab=expression(pi(theta)),
+      main=paste0("Gamma Prior Distribution \n ",paste0("with rate r=",round(r_exp,1)," and shape s=",round(s_exp,2))),n=10000, col="cyan", type = "l")
+```
+
+```{r}
+print(paste0("Mean of Prior is: ", format((s_exp / r_exp),scientific = F)))
+print(paste0("Variance of Prior is: ", format((s_exp/(r_exp**2)),scientific = F)))
+```
+
+The prior is vague in the sense that it has a big uncertainty (if we the compare it to the Posterior) as the variance is bigger than in the Posterior and therefore the Prior is not as "concentrated" as the Posterior. **However, this is more precisely explained in the following point**
+
+### 2.5 Based on the information gathered on the 20 bulbs, what can you say about the main characteristics of the lifetime of yor innovative bulb? Argue that we have learnt some relevant information about the parameter and this can be converted into relevant information about $1/\theta$
+
+First let's consider the Gamma Prior. Check that it is defined by $r = 1002.4$ and $s=3.01$ and therefore it is centered in $\mu = 0.002999999$ and it has a variance of $\sigma^{2} = 2.9929e-06$
+
+```{r}
+curve(dgamma(x,rate=r_exp,shape=s_exp),from=0,to=0.01,xlab=expression(theta),ylab=expression(pi(theta)),
+      main=paste0("Gamma Prior Distribution \n ",paste0("with rate r=",round(r_exp,1)," and shape s=",round(s_exp,2))),n=10000, col="cyan", type = "l")
+```
+
+##### Posterior Distribution
+
+The following graph pictures the posterior distribution. This is obtained by means of **including the observed data along with the prior**. Here the $s^* = s + n$ and $r^* = r + \sum_{i=1}^{n}y_i$. In words, the new shape parameter corresponds to the sum of the old s parameter plus the total number of observations of bulbs , while the new rate parameter corresponds to the old r parameter plus the total lifetime on hours of the bulbs in the data we have.
+
+**Hence, we obtain this by including the observed data and therefore update our prior belief**
+
+```{r}
+s1_exp <- s_exp + length(bulb_data)
+r1_exp <- r_exp + sum(bulb_data)
+
+curve(dgamma(x,rate=r1_exp,shape=s1_exp),from=0,to=0.01,col="blue",
+      xlab=expression(theta),ylab=expression(pi(theta)),
+      main=paste0("Gamma Posterior Distribution \n ",paste0("with rate r=",round(r1_exp,1)," and shape s=",round(s1_exp,1))),1000)
+```
+
+Now, the following graph allows us to appreciate more clearly 2 basic things: 
+
+```{r}
+curve(dgamma(x,rate=r_exp,shape=s_exp),from=0,to=0.01,xlab=expression(theta),ylab=expression(pi(theta)),
+      main=paste0("Gamma Prior and Posterior Distribution"),n=10000, col="cyan", type = "l",ylim=c(0,1000))
+curve(dgamma(x,rate=r1_exp,shape=s1_exp),from=0,to=0.01,col="blue",1000, add = T)
+abline(v=(1/mean(bulb_data)), col = "red")
+```
+
+* **1) Mean**: at least graphically, the mean of the Posterior is not that different from the mean of the Prior. This could mean that by observing the data we got, we update our Prior belief but not in a dramatically way (as for example was in the exercise 1 where the mean once we observed data was dramatically different from our Prior belief.)
+
+However if we compute the mean we with the corresponding parameter for the Prior and the Posterior we have that by observing the average lifetime of the bulb increases by 37% from 333 hours according to our Prior up to 458 hours according to our Posterior. 
+
+```{r,echo=F}
+print(paste0("Mean of Prior is: ", round(s_exp / r_exp,7), " produces a ",round(1/(s_exp / r_exp),2)," hours average bulb lifetime."))
+print(paste0("Mean of Posterior is: ", round(s1_exp / r1_exp,5), " produces a ",round(1/(s1_exp/r1_exp),2)," hours average bulb lifetime."))
+```
+
+* **2) Variance**: at least graphically, it is evident how the variance of the Posterior is smaller than the variance of the Prior. This is desired because due to the data that we're observing the uncertainty of the inference we're carrying out diminishes. 
+
+Now, if we compute the variances, we can appreciate how the variance, thanks to the information gathered on the 20 bulbs, decreases 93%. This means, our inference once we've seen this data, is less uncertain than before. 
+
+```{r,echo=F}
+var_pri_bulb <- (s_exp / (r_exp**2))
+var_post_bulb <- (s1_exp / (r1_exp**2))
+print(paste0("Variance of Prior is: ", format(var_pri_bulb,scientific = F)))
+print(paste0("Variance of Posterior is: ", format(var_post_bulb,scientific = F)))
+
+print(paste0("Variance is ",round(abs(((var_post_bulb-var_pri_bulb)/var_pri_bulb)*100),0),"% smaller in the Posterior than in the Prior"))
+```
+
+### 2.6 However, your boss would be interested in the probability that the average bulb lifetime $1/\theta$ exceeds 550 hours. What can you say about that after observing the data? Provide her with a meaningful Bayesian answer.
+
+Once we have observed data, we have a Posterior that is distributed as a Gamma with $s =$ `r s1_exp` and $r = 10541$. Then if we want to compute the prob that the average bulb lifetime $1/\theta$ is above 550, we can make use of the Cumulative Distribution Function (CDF) and the $\theta$ to compute this probability as follows:
+
+```{r}
+1- pexp(550,rate = (s1_exp / r1_exp))
+```
+
+This means that the probability that the average bulb lifetime **exceeds** 550 hours is 30%. 
+
+```{r}
+#rmarkdown::render("1999250_braulio_villalobos_sds2_hw1.Rmd")
+```
+
